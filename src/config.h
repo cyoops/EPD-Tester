@@ -126,6 +126,8 @@ static constexpr int COLOR_BUF_LEN = (W * H) / 4;
 #define EPD_PANEL_LABEL "HINK-E0213A127/SSD1680"
 #elif defined(EPD_PANEL_213_A1360069_IL0373_BWR)
 #define EPD_PANEL_LABEL "A1360069/IL0373"
+#elif defined(EPD_PANEL_29_SSD1608_V1)
+#define EPD_PANEL_LABEL "2.9-inch SSD1608 V1"
 #elif defined(EPD_PANEL_29)
 #define EPD_PANEL_LABEL "GDEY029T94"
 #elif defined(EPD_PANEL_583_UC8179) || defined(EPD_PANEL_583)

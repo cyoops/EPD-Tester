@@ -1349,6 +1349,34 @@ GxEPD2_3C<GxEPD2_213c, GxEPD2_213c::HEIGHT / 4> display(
   #include <epd/GxEPD2_420_M01.h>
   GxEPD2_BW<GxEPD2_420_M01, GxEPD2_420_M01::HEIGHT / 4> display(
       GxEPD2_420_M01(PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY));
+  #elif defined(EPD_PANEL_29_SSD1608_V1)
+  #include <epd/GxEPD2_290.h>
+  using EPD29Driver = GxEPD2_290;
+  GxEPD2_BW<EPD29Driver, EPD29Driver::HEIGHT> display(
+      EPD29Driver(PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY));
+  static uint8_t rotated_buffer[IMG_BUF_LEN];
+
+  static bool is_black_pixel(const uint8_t* buffer, int width, int x, int y) {
+      int row_bytes = (width + 7) / 8;
+      return (buffer[y * row_bytes + x / 8] & (0x80 >> (x % 8))) == 0;
+  }
+
+  static void set_black_pixel(uint8_t* buffer, int width, int x, int y) {
+      int row_bytes = (width + 7) / 8;
+      buffer[y * row_bytes + x / 8] &= ~(0x80 >> (x % 8));
+  }
+
+  static void rotate_landscape_to_panel(const uint8_t* source) {
+      memset(rotated_buffer, 0xFF, sizeof(rotated_buffer));
+      for (int src_y = 0; src_y < H; src_y++) {
+          for (int src_x = 0; src_x < W; src_x++) {
+              if (!is_black_pixel(source, W, src_x, src_y)) continue;
+              int dst_x = src_y;
+              int dst_y = W - 1 - src_x;
+              set_black_pixel(rotated_buffer, EPD29Driver::WIDTH, dst_x, dst_y);
+          }
+      }
+  }
   #elif defined(EPD_PANEL_29)
   #include <gdey/GxEPD2_290_GDEY029T94.h>
   GxEPD2_BW<GxEPD2_290_GDEY029T94, GxEPD2_290_GDEY029T94::HEIGHT> display(
@@ -1587,14 +1615,19 @@ void epdDisplay(const uint8_t *image) {
     Serial.println("[EPD-GxEPD2] refresh complete");
     display.powerOff();
 #else
-#if defined(EPD_PANEL_29)
+#if defined(EPD_PANEL_29) || defined(EPD_PANEL_29_SSD1608_V1)
     rotate_landscape_to_panel(image);
     display.writeImage(
         rotated_buffer,
         0,
         0,
+#if defined(EPD_PANEL_29_SSD1608_V1)
+        EPD29Driver::WIDTH,
+        EPD29Driver::HEIGHT,
+#else
         GxEPD2_290_GDEY029T94::WIDTH,
         GxEPD2_290_GDEY029T94::HEIGHT,
+#endif
         false,
         false,
         false
@@ -1633,14 +1666,19 @@ void epdDisplayFast(const uint8_t *image) {
     return;
 #endif
     epdInit();
-#if defined(EPD_PANEL_29)
+#if defined(EPD_PANEL_29) || defined(EPD_PANEL_29_SSD1608_V1)
     rotate_landscape_to_panel(image);
     display.writeImage(
         rotated_buffer,
         0,
         0,
+#if defined(EPD_PANEL_29_SSD1608_V1)
+        EPD29Driver::WIDTH,
+        EPD29Driver::HEIGHT,
+#else
         GxEPD2_290_GDEY029T94::WIDTH,
         GxEPD2_290_GDEY029T94::HEIGHT,
+#endif
         false,
         false,
         false
@@ -1722,7 +1760,7 @@ void epdPartialDisplay(uint8_t *data, int xStart, int yStart, int xEnd, int yEnd
 }
 
 bool epdSupportsPartialRefresh() {
-#if defined(EPD_PANEL_29) || defined(INKSIGHT_GDEY042Z98_BWR_PANEL) || defined(INKSIGHT_HINK_E0213A127_BWR_PANEL) || defined(INKSIGHT_A1360069_IL0373_BWR_PANEL)
+#if defined(EPD_PANEL_29) || defined(EPD_PANEL_29_SSD1608_V1) || defined(INKSIGHT_GDEY042Z98_BWR_PANEL) || defined(INKSIGHT_HINK_E0213A127_BWR_PANEL) || defined(INKSIGHT_A1360069_IL0373_BWR_PANEL)
     return false;
 #else
     return true;
@@ -1740,7 +1778,7 @@ void epdPartialDisplayWithOld(uint8_t *data, const uint8_t *oldData, int xStart,
     return;
 #endif
     epdInit();
-#if defined(EPD_PANEL_29)
+#if defined(EPD_PANEL_29) || defined(EPD_PANEL_29_SSD1608_V1)
     (void)data;
     (void)oldData;
     (void)xStart;
@@ -1752,8 +1790,13 @@ void epdPartialDisplayWithOld(uint8_t *data, const uint8_t *oldData, int xStart,
         rotated_buffer,
         0,
         0,
+#if defined(EPD_PANEL_29_SSD1608_V1)
+        EPD29Driver::WIDTH,
+        EPD29Driver::HEIGHT,
+#else
         GxEPD2_290_GDEY029T94::WIDTH,
         GxEPD2_290_GDEY029T94::HEIGHT,
+#endif
         false,
         false,
         false

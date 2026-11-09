@@ -215,6 +215,13 @@ HINK-E0213A127（250×128，SSD1680）目前使用专用候选环境
 其他 SSD1680 屏幕。刷写后应检查图像方向、边缘裁切及黑/白/红显示，再决定
 是否将此型号列为已验证兼容屏；若驱动或面板设置不兼容，再为其增加专用分支。
 
+HINK-E029A01（2.9 英寸，296×128，SSD1608）已在本项目实物验证，可使用通用环境
+`epd_29_ssd1608_bw_c3_supermini`。该环境使用 GxEPD2 的 2.9 英寸 V1
+`GxEPD2_290` 驱动，并将横向测试画面转换为 128×296 原生方向；本项目已确认屏幕
+正常显示。此兼容结论仅适用于已测试的 HINK-E029A01，不应仅凭分辨率或控制器名称
+推定其他屏幕兼容。原 `epd_29_gdey029t94_bw_c3_supermini` 使用 GDEY029T94 /
+SSD1680 驱动，仍独立保留。
+
 A1360069（标称 212×104，推测 IL0373）使用独立候选环境
 `epd_213_a1360069_il0373_bwr_c3_supermini`，采用 GxEPD2
 `GxEPD2_213c` 三色驱动（该类面板参数为原生 104×212），并转换横向 212×104
@@ -247,7 +254,8 @@ BWR 候选，不据此宣称兼容其他 IL0373 面板。若该屏实际为黑�
 | HINK-E0213A127 / SSD1680，三色（候选） | `epd_213_hink_e0213a127_ssd1680_bwr_c3_supermini` | 250×128 输入，2bpp；使用 128×250 原生方向的 GxEPD2 驱动，待实物验证 |
 | A1360069 / IL0373，三色（候选） | `epd_213_a1360069_il0373_bwr_c3_supermini` | 212×104 输入，2bpp；使用 GxEPD2 213c 104×212 原生方向驱动，待实物验证 |
 | DEPG0420 / RY683，专用软件 SPI | `epd_42_depg0420_ry683_bwr_c3_supermini` | 2bpp；专用 DKE RY683 分支 |
-| 2.9 英寸，GDEY029T94 / GxEPD2 | `epd_29_gdey029t94_bw_c3_supermini`、`epd_29_gdey029t94_bw_wroom32e` | 296×128，1bpp |
+| 2.9 英寸，GDEY029T94 / SSD1680 / GxEPD2 | `epd_29_gdey029t94_bw_c3_supermini`、`epd_29_gdey029t94_bw_wroom32e` | 296×128，1bpp |
+| 2.9 英寸 SSD1608 / V1 | `epd_29_ssd1608_bw_c3_supermini` | 296×128，1bpp；已验证 HINK-E029A01 |
 | 5.83 英寸，GDEQ0583T31 / UC8179 | `epd_583_gdeq0583t31_uc8179_bw_c3_supermini`、`epd_583_gdeq0583t31_uc8179_bw_c3_std`、`epd_583_gdeq0583t31_uc8179_bw_c3_wroom02`、`epd_583_gdeq0583t31_uc8179_bw_wroom32e` | 648×480，1bpp；整屏刷新 |
 | 7.5 英寸 / GxEPD2 750_T7 | `epd_75_gdey075t7_bw_c3_supermini`、`epd_75_gdey075t7_bw_wroom32e` | 800×480，1bpp |
 | GDEY042T81 / GxEPD2 | `epd_42_gdey042t81_bw_c3_supermini` | 400×300，1bpp；独立 GxEPD2 路径 |
