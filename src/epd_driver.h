@@ -21,6 +21,9 @@ void epdDisplayDeepClear(const uint8_t *image);
 // Full-screen display with pre-packed 2bpp data (4-color panels)
 void epdDisplay2bpp(const uint8_t *image2bpp);
 
+// Full-screen display with pre-packed 4bpp data (six-color E6 panels)
+void epdDisplay4bpp(const uint8_t *image4bpp);
+
 // Full-screen display with fast refresh (reduced flashing)
 void epdDisplayFast(const uint8_t *image);
 

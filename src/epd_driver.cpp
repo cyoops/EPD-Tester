@@ -3,7 +3,188 @@
 
 #include <string.h>
 
-#if defined(EPD_PANEL_42_SSD1619A_BW)
+#if defined(EPD_PANEL_E6_JD7601)
+
+#include <SPI.h>
+
+namespace {
+
+constexpr uint32_t kE6SpiClockHz = 2000000;
+constexpr unsigned long kE6InitTimeoutMs = 15000;
+constexpr unsigned long kE6PowerTimeoutMs = 60000;
+constexpr unsigned long kE6RefreshTimeoutMs = 120000;
+constexpr size_t kE6TransferChunkBytes = 4096;
+const SPISettings kE6SpiSettings(kE6SpiClockHz, MSBFIRST, SPI_MODE0);
+bool e6ControllerInitialized = false;
+
+void e6WriteCommand(uint8_t command) {
+    SPI.beginTransaction(kE6SpiSettings);
+    digitalWrite(PIN_EPD_CS, LOW);
+    digitalWrite(PIN_EPD_DC, LOW);
+    SPI.transfer(command);
+    digitalWrite(PIN_EPD_CS, HIGH);
+    SPI.endTransaction();
+}
+
+void e6WriteData(uint8_t data) {
+    SPI.beginTransaction(kE6SpiSettings);
+    digitalWrite(PIN_EPD_CS, LOW);
+    digitalWrite(PIN_EPD_DC, HIGH);
+    SPI.transfer(data);
+    digitalWrite(PIN_EPD_CS, HIGH);
+    SPI.endTransaction();
+}
+
+void e6WriteDataBlock(const uint8_t *data, size_t length) {
+    size_t offset = 0;
+    while (offset < length) {
+        const size_t remaining = length - offset;
+        const uint32_t chunkLength = static_cast<uint32_t>(
+            remaining < kE6TransferChunkBytes ? remaining : kE6TransferChunkBytes);
+        SPI.beginTransaction(kE6SpiSettings);
+        digitalWrite(PIN_EPD_CS, LOW);
+        digitalWrite(PIN_EPD_DC, HIGH);
+        SPI.writeBytes(data + offset, chunkLength);
+        digitalWrite(PIN_EPD_CS, HIGH);
+        SPI.endTransaction();
+        offset += chunkLength;
+    }
+}
+
+bool e6WaitUntilReady(unsigned long timeoutMs, const char *stage) {
+    const unsigned long startedAt = millis();
+    // The tested GDEH037E01 driver board asserts BUSY low while processing.
+    while (digitalRead(PIN_EPD_BUSY) == LOW) {
+        if (millis() - startedAt >= timeoutMs) {
+            Serial.printf("[EPD-JD7601] BUSY timeout at %s after %lu ms\n",
+                          stage, timeoutMs);
+            return false;
+        }
+        delay(1);
+    }
+    return true;
+}
+
+bool e6Refresh(const uint8_t *image) {
+    if (!image) {
+        Serial.println("[EPD-JD7601] 4bpp refresh aborted: null image");
+        return false;
+    }
+    if (!e6ControllerInitialized) {
+        Serial.println("[EPD-JD7601] controller is not initialized");
+        return false;
+    }
+
+    Serial.printf("[EPD-JD7601] write 4bpp frame (%u bytes)\n",
+                  static_cast<unsigned>(COLOR_BUF_LEN));
+    if (!e6WaitUntilReady(kE6InitTimeoutMs, "before DTM1")) return false;
+    e6WriteCommand(0x10);
+    e6WriteDataBlock(image, COLOR_BUF_LEN);
+
+    Serial.println("[EPD-JD7601] power on");
+    e6WriteCommand(0x04);
+    if (!e6WaitUntilReady(kE6PowerTimeoutMs, "power on")) return false;
+    delay(10);
+
+    Serial.println("[EPD-JD7601] refresh start");
+    e6WriteCommand(0x12);
+    e6WriteData(0x00);
+    delay(10);
+    if (!e6WaitUntilReady(kE6RefreshTimeoutMs, "refresh")) return false;
+
+    Serial.println("[EPD-JD7601] power off");
+    e6WriteCommand(0x02);
+    e6WriteData(0x00);
+    if (!e6WaitUntilReady(kE6PowerTimeoutMs, "power off")) return false;
+    Serial.println("[EPD-JD7601] full refresh complete");
+    return true;
+}
+
+} // namespace
+
+void gpioInit() {
+    pinMode(PIN_CFG_BTN, INPUT_PULLUP);
+    pinMode(PIN_EPD_BUSY, INPUT);
+    pinMode(PIN_EPD_RST, OUTPUT);
+    pinMode(PIN_EPD_DC, OUTPUT);
+    pinMode(PIN_EPD_CS, OUTPUT);
+    digitalWrite(PIN_EPD_CS, HIGH);
+    digitalWrite(PIN_EPD_DC, HIGH);
+    digitalWrite(PIN_EPD_RST, HIGH);
+    SPI.begin(PIN_EPD_SCK, -1, PIN_EPD_MOSI, PIN_EPD_CS);
+}
+
+void epdInit() {
+    e6ControllerInitialized = false;
+    Serial.println("[EPD-JD7601] reset start");
+    digitalWrite(PIN_EPD_RST, LOW);
+    delay(20);
+    digitalWrite(PIN_EPD_RST, HIGH);
+    delay(20);
+    if (!e6WaitUntilReady(kE6InitTimeoutMs, "reset")) return;
+
+    e6WriteCommand(0xE9);
+    e6WriteData(0x01);
+    e6ControllerInitialized = true;
+    Serial.println("[EPD-JD7601] initialization command sent");
+}
+
+void epdInitFast() {
+    epdInit();
+}
+
+void epdDisplay(const uint8_t *image) {
+    (void)image;
+    Serial.println("[EPD-JD7601] monochrome refresh is not supported; use 4bpp");
+}
+
+void epdDisplayDeepClear(const uint8_t *image) {
+    (void)image;
+    Serial.println("[EPD-JD7601] deep-clear refresh is not supported");
+}
+
+void epdDisplay2bpp(const uint8_t *image2bpp) {
+    (void)image2bpp;
+    Serial.println("[EPD-JD7601] 2bpp refresh is not supported; use 4bpp");
+}
+
+void epdDisplay4bpp(const uint8_t *image4bpp) {
+    e6Refresh(image4bpp);
+}
+
+void epdDisplayFast(const uint8_t *image) {
+    (void)image;
+    Serial.println("[EPD-JD7601] fast refresh is not supported; use full 4bpp refresh");
+}
+
+bool epdSupportsPartialRefresh() {
+    return false;
+}
+
+void epdPartialDisplay(uint8_t *data, int xStart, int yStart, int xEnd, int yEnd) {
+    (void)data;
+    (void)xStart;
+    (void)yStart;
+    (void)xEnd;
+    (void)yEnd;
+    Serial.println("[EPD-JD7601] partial refresh is not supported");
+}
+
+void epdPartialDisplayWithOld(uint8_t *data, const uint8_t *oldData,
+                              int xStart, int yStart, int xEnd, int yEnd) {
+    (void)oldData;
+    epdPartialDisplay(data, xStart, yStart, xEnd, yEnd);
+}
+
+void epdSleep() {
+    if (!e6ControllerInitialized) return;
+    if (!e6WaitUntilReady(kE6PowerTimeoutMs, "before sleep")) return;
+    e6WriteCommand(0x07);
+    e6WriteData(0xA5);
+    e6ControllerInitialized = false;
+}
+
+#elif defined(EPD_PANEL_42_SSD1619A_BW)
 
 namespace {
 

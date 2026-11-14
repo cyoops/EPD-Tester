@@ -39,6 +39,10 @@
 | `BOARD_PROFILE_SMT_C3` | `esp32-c3-devkitm-1` | 6 | 4 | 7 | 1 | 2 | 10 |
 | `BOARD_PROFILE_YD_ESP32_S3_N16R8` | `esp32-s3-devkitc-1` | 11 | 12 | 10 | 9 | 8 | 7 |
 
+GDEH037E01 使用 `BOARD_PROFILE_ESP32_C3`，与项目 4.2 英寸屏幕相同：
+MOSI/DIN=GPIO6、SCK/CLK=GPIO4、CS=GPIO7、DC=GPIO1、RST=GPIO2、
+BUSY=GPIO10；不连接 MISO。C3 GPIO 为 3.3 V 逻辑，驱动板电源应按其规格
+单独确认并与 C3 共地；不要把裸屏的供电需求等同于 C3 的 3.3 V 输出能力。
 
 
 
@@ -67,7 +71,12 @@ IMG_BUF_LEN = (EPD_WIDTH / 8) * EPD_HEIGHT
 `-DEPD_BPP=2` 后，网络下载和上层显示逻辑会启用 `colorBuf`；这表示
 数据传输格式，不保证面板本身一定能显示红色等多种颜色。
 
-灰度或多色墨水屏按需定义更大的：DEPD_BPP值
+E6 六色屏使用 4bpp，每字节打包 2 个像素。GDEH037E01 环境的分辨率为
+480 x 720（逻辑竖屏），帧缓冲区大小为 172800 bytes；驱动按控制器原生
+720 x 480 横向扫描顺序发送，并针对实测面板方向镜像横向坐标。E6 缓冲区
+静态占用 C3 RAM；当前构建 RAM 用量约 70.4%。色值 nibble 遵循参考示例：
+`0x0` 黑、`0x1` 白、`0x2` 黄、`0x3` 红、`0x5` 蓝、`0x6` 绿。当前 4bpp
+仅开放给专用 JD7601 驱动，不能直接用于其他面板。
 
 
 
@@ -187,7 +196,7 @@ build_flags =
   的 RAM window。
 - 改 MCU：同时修改 `board`、`BOARD_PROFILE_*` 和 USB/Flash 设置。
 - 改颜色能力：检查 `EPD_BPP`、网络参数、`colorBuf` 和
-  `epdDisplay2bpp()`。
+  `epdDisplay2bpp()` / `epdDisplay4bpp()`。
 
 配置名修改不会自动改变控制器驱动。比如把 `bwr` 改成 `bw`，如果
 `EPD_PANEL_*` 和 `EPD_BPP` 不变，运行行为仍然可能是原来的彩色驱动。
@@ -214,6 +223,27 @@ HINK-E0213A127（250×128，SSD1680）目前使用专用候选环境
 方向和颜色映射尚未实物确认，因此它是待验证的首次测试配置，不代表已兼容
 其他 SSD1680 屏幕。刷写后应检查图像方向、边缘裁切及黑/白/红显示，再决定
 是否将此型号列为已验证兼容屏；若驱动或面板设置不兼容，再为其增加专用分支。
+
+佳显 GDEH037E01 E6（480×720）使用独立配置
+`epd_437_jd7601_e6_c3_supermini`，采用 JD7601 的 4bpp 六色全屏刷新路径。
+该配置已在 ESP32-C3 SuperMini 和所用 SPI 驱动板上实物验证：颜色、竖屏方向
+及左右方向均正确；结论只适用于已测试的 GDEH037E01/驱动板组合，不能据此
+推定其他 JD7601 屏幕或驱动板兼容。参考驱动使用 SPI Mode 0、2 MHz，并将
+BUSY 低电平视为忙；本项目使用基础初始化、写帧、上电、刷新及断电命令序列。
+480×720 是逻辑测试画布；4bpp 数据按 720×480 原生横向扫描并镜像横向坐标后
+发送，以匹配实测面板方向。实测完整刷新约 30 秒，刷新后等待 10 秒再显示下一帧。
+
+接线沿用上方 `BOARD_PROFILE_ESP32_C3` 的 4.2 英寸屏幕引脚配置。刷写和查看日志：
+
+```sh
+pio run -e epd_437_jd7601_e6_c3_supermini -t upload
+pio device monitor -e epd_437_jd7601_e6_c3_supermini
+```
+
+串口应显示 `panel=GDEH037E01/JD7601 E6`、`resolution=480x720 bpp=4`；
+每次刷新应出现 `[EPD-JD7601] refresh start` 和 `full refresh complete`。
+刷新耗时明显短于实测值或出现 `BUSY timeout` 时，先检查 BUSY 接线、极性、
+驱动板供电及共地。
 
 HINK-E029A01（2.9 英寸，296×128，SSD1608）已在本项目实物验证，可使用通用环境
 `epd_29_ssd1608_bw_c3_supermini`。该环境使用 GxEPD2 的 2.9 英寸 V1
@@ -243,6 +273,7 @@ BWR 候选，不据此宣称兼容其他 IL0373 面板。若该屏实际为黑�
 
 | 面板 / 驱动路径 | PlatformIO 环境（含 MCU 或功能变体） | 数据路径 |
 |---|---|---|
+| 佳显 GDEH037E01 / JD7601 E6 | `epd_437_jd7601_e6_c3_supermini` | 480×720，4bpp 六色；已验证所用 C3/驱动板组合 |
 | 4.2 英寸 SSD1683 软件 SPI | `epd_42_ssd1683_bw_c3_supermini`、`epd_42_ssd1683_bw_c3_std`、`epd_42_ssd1683_bw_wroom32e`、`epd_42_ssd1683_bw_yd_s3_n16r8`、`epd_42_ssd1683_bw_wroom32e_ai_chat`、`epd_42_ssd1683_bw_wroom32e_vocab_review` | 1bpp；兼容屏见上表 |
 | GYE042A87 / GxEPD2 | `epd_42_gye042a87_bw_c3_supermini`、`epd_42_gye042a87_bw_c3_std`、`epd_42_gye042a87_bw_wroom32e`、`epd_42_gye042a87_bw_smt_wroom32e` | 1bpp |
 | GDEM042F52 / JD79668，专用软件 SPI | `epd_42_gdem042f52_jd79668_bwr_c3_supermini`、`epd_42_gdem042f52_jd79668_bwr_c3_std`、`epd_42_gdem042f52_jd79668_bwr_wroom32e` | 2bpp |
@@ -272,12 +303,14 @@ GPIO、控制器初始化、全屏数据传送及刷新调用阶段和耗时。
 
 - `src/config.h` 根据 `BOARD_PROFILE_*` 选择引脚，并校验屏幕尺寸与
   `EPD_BPP`；图像缓冲区按行排列，单色像素高位先存。
-- `src/epd_driver.h` 定义统一的初始化、单色/2bpp 全屏刷新和休眠接口；
-  `src/epd_driver.cpp` 根据 `EPD_PANEL_*` 编译对应的已验证驱动分支。
+- `src/epd_driver.h` 定义统一的初始化、单色/2bpp/4bpp 全屏刷新和休眠接口；
+  `src/epd_driver.cpp` 根据 `EPD_PANEL_*` 编译对应的面板驱动分支。
 - `src/display.cpp` 生成不依赖网络或文件系统的本地测试画面。2bpp 帧缓冲
-  以每像素 2 位、每字节 4 像素（高位在前）存储；1bpp 面板把彩色索引映射
-  为黑白，以便仍可验证尺寸、方向及布局。
-- `src/main.cpp` 分配缓冲区并执行显示轮播；测试图由屏幕尺寸动态绘制，
+  以每像素 2 位、每字节 4 像素（高位在前）存储；E6 的 4bpp 帧缓冲每字节
+  2 像素（高 nibble 在前），并按面板实测方向映射到原生扫描顺序；
+  1bpp 面板把彩色索引映射为黑白，以便仍可验证尺寸、方向及布局。
+- `src/main.cpp` 准备缓冲区并执行显示轮播；E6 的固定 4bpp 帧缓冲采用静态
+  存储，避免启动时申请大块连续堆内存。测试图由屏幕尺寸动态绘制，
   不需要把 `xbpp_img` 中所有参考文件复制到设备闪存。
 
 
@@ -294,27 +327,30 @@ setup()
   -> gpioInit()
   -> epdInit()
   -> renderTestSlide()
-  -> epdDisplay() / epdDisplay2bpp()
+  -> epdDisplay() / epdDisplay2bpp() / epdDisplay4bpp()
 ```
 
 ### 4.2 测试画面
 
-固件依次显示调色板/棋盘图案、黑/白/黄/红纯色测试（中心标注颜色与
-分辨率）以及带边框、十字线和方向标记的测试；方向文字放在独立区域，
+普通配置依次显示调色板/棋盘图案、黑/白/黄/红纯色测试以及方向测试；
+E6 配置额外显示蓝、绿纯色画面。纯色画面中心标注颜色与分辨率；方向测试
+带边框、十字线和方向标记，方向文字放在独立区域，
 不覆盖中心轴线或红/黑方向标记。
-每张画面完成刷新后等待 10 秒再进入下一张。纯色画面的中心标签不覆盖
+每张画面完成刷新后等待 10 秒再进入下一张；E6 单次刷新约 30 秒，因此两张
+画面开始之间约 40 秒。纯色画面的中心标签不覆盖
 主要测试区域，同时便于辨认当前测试颜色。
 
-`xbpp_img/` 保存与六张轮播画面对应的裸 `.1bpp` / `.2bpp` 帧缓冲及
-逐文件 PNG 预览，覆盖项目使用的屏幕分辨率和黑白/三色数据路径。固件仍动态
+`xbpp_img/` 保存与轮播画面对应的裸 `.1bpp` / `.2bpp` / `.4bpp` 帧缓冲及
+逐文件 PNG 预览，覆盖项目使用的屏幕分辨率和黑白/多色数据路径。固件仍动态
 生成测试画面，不会从该目录读取图片；这些文件用于离线核对帧缓冲和预览。
 格式、色号及各分辨率的文件清单见 [xbpp_img/README.md](./xbpp_img/README.md)。
 
 ### 4.3 显示与刷新策略
 
 - 初始化后进行全屏刷新；不执行联网、局部刷新或休眠流程。
-- 按调色板、四种纯色和方向/布局测试顺序循环，刷新结束后再计时等待
-  10 秒。
+- 按调色板、纯色和方向/布局测试顺序循环，刷新结束后再等待 10 秒。
 - 默认 PlatformIO 环境为 `epd_42_ssd1683_bw_c3_supermini`，使用
   ESP32-C3 DevKitM-1、默认 400 x 300 分辨率与 SSD1683 软件 SPI 驱动。
 - `epd_42_wft042_bwr_c3_supermini` 提供 2bpp 三色驱动的编译验证环境。
+- `epd_437_jd7601_e6_c3_supermini` 提供 GDEH037E01 的 4bpp 候选驱动；
+  刷写命令为 `pio run -e epd_437_jd7601_e6_c3_supermini -t upload`。

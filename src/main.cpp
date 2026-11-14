@@ -9,14 +9,24 @@
 uint8_t imgBuf[IMG_BUF_LEN];
 
 #if EPD_BPP >= 2
+#if EPD_BPP == 4
+// Keep the fixed E6 frame in BSS instead of requesting a large heap block at startup.
+static uint8_t e6ColorBuf[COLOR_BUF_LEN];
+uint8_t *colorBuf = e6ColorBuf;
+#else
 uint8_t *colorBuf = nullptr;
+#endif
 bool useColorBuf = false;
 
 bool ensureColorBuf() {
+#if EPD_BPP == 4
+    return colorBuf == e6ColorBuf;
+#else
     if (!colorBuf) {
         colorBuf = static_cast<uint8_t *>(malloc(COLOR_BUF_LEN));
     }
     return colorBuf != nullptr;
+#endif
 }
 #endif
 
@@ -41,7 +51,9 @@ void displayCurrentSlide() {
                   millis() - renderStartedAt);
     Serial.println("[DISPLAY] full-screen transfer and refresh start");
     const unsigned long refreshStartedAt = millis();
-#if EPD_BPP >= 2
+#if EPD_BPP == 4
+    epdDisplay4bpp(colorBuf);
+#elif EPD_BPP == 2
     epdDisplay2bpp(colorBuf);
 #else
     epdDisplay(imgBuf);
@@ -77,10 +89,11 @@ void setup() {
                   PIN_EPD_RST, PIN_EPD_BUSY);
 
 #if EPD_BPP >= 2
-    Serial.printf("[BOOT] allocating 2bpp framebuffer (%u bytes)\n",
+    Serial.printf("[BOOT] preparing %d-bpp framebuffer (%u bytes)\n",
+                  EPD_BPP,
                   static_cast<unsigned>(COLOR_BUF_LEN));
     if (!ensureColorBuf()) {
-        Serial.println("[ERROR] failed to allocate the 2bpp framebuffer");
+        Serial.println("[ERROR] color framebuffer is unavailable");
         while (true) {
             delay(1000);
         }

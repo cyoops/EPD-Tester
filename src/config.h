@@ -71,18 +71,24 @@
 #if EPD_WIDTH <= 0 || EPD_HEIGHT <= 0
 #error "EPD_WIDTH and EPD_HEIGHT must be positive"
 #endif
-#if EPD_BPP != 1 && EPD_BPP != 2
-#error "EPD_BPP must be 1 or 2"
+#if EPD_BPP != 1 && EPD_BPP != 2 && EPD_BPP != 4
+#error "EPD_BPP must be 1, 2, or 4"
 #endif
 #if EPD_BPP == 2 && ((EPD_WIDTH * EPD_HEIGHT) % 4) != 0
 #error "EPD_WIDTH * EPD_HEIGHT must be divisible by 4 for 2bpp"
+#endif
+#if EPD_BPP == 4 && ((EPD_WIDTH * EPD_HEIGHT) % 2) != 0
+#error "EPD_WIDTH * EPD_HEIGHT must be divisible by 2 for 4bpp"
+#endif
+#if EPD_BPP == 4 && !defined(EPD_PANEL_E6_JD7601)
+#error "4bpp is currently supported only by EPD_PANEL_E6_JD7601"
 #endif
 
 static constexpr int W = EPD_WIDTH;
 static constexpr int H = EPD_HEIGHT;
 static constexpr int ROW_BYTES = (W + 7) / 8;
 static constexpr int IMG_BUF_LEN = ROW_BYTES * H;
-static constexpr int COLOR_BUF_LEN = (W * H) / 4;
+static constexpr int COLOR_BUF_LEN = (W * H * EPD_BPP) / 8;
 
 #if defined(BOARD_PROFILE_ESP32_C3)
 #define BOARD_PROFILE_LABEL "ESP32-C3"
@@ -100,6 +106,8 @@ static constexpr int COLOR_BUF_LEN = (W * H) / 4;
 
 #if defined(EPD_PANEL_42_SSD1683_BW)
 #define EPD_PANEL_LABEL "SSD1683 software SPI"
+#elif defined(EPD_PANEL_E6_JD7601)
+#define EPD_PANEL_LABEL "GDEH037E01/JD7601 E6"
 #elif defined(EPD_PANEL_42_SSD1619A_BW)
 #define EPD_PANEL_LABEL "SSD1619A"
 #elif defined(EPD_PANEL_42_SSD1608_DUAL_BW)

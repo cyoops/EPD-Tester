@@ -10,6 +10,8 @@ constexpr uint8_t kBlack = 0;
 constexpr uint8_t kWhite = 1;
 constexpr uint8_t kYellow = 2;
 constexpr uint8_t kRed = 3;
+constexpr uint8_t kBlue = 5;
+constexpr uint8_t kGreen = 6;
 
 struct Glyph {
     char character;
@@ -81,7 +83,11 @@ void clearFrame(uint8_t color) {
     memset(imgBuf, black ? 0x00 : 0xFF, IMG_BUF_LEN);
 #if EPD_BPP >= 2
     if (ensureColorBuf()) {
+#if EPD_BPP == 4
+        memset(colorBuf, static_cast<uint8_t>(color * 0x11), COLOR_BUF_LEN);
+#else
         memset(colorBuf, static_cast<uint8_t>(color * 0x55), COLOR_BUF_LEN);
+#endif
     }
 #endif
 }
@@ -103,12 +109,23 @@ void setPixel(int x, int y, uint8_t color) {
 #if EPD_BPP >= 2
     if (colorBuf) {
         const int pixelIndex = y * W + x;
+#if EPD_BPP == 4
+        // Map the portrait canvas into the tested JD7601 native scan orientation.
+        const int nativePixelIndex = (W - 1 - x) * H + y;
+        const int byteIndex = nativePixelIndex / 2;
+        const int shift = (nativePixelIndex % 2 == 0) ? 4 : 0;
+        const uint8_t mask = static_cast<uint8_t>(0x0F << shift);
+        colorBuf[byteIndex] = static_cast<uint8_t>(
+            (colorBuf[byteIndex] & static_cast<uint8_t>(~mask)) |
+            ((color & 0x0F) << shift));
+#else
         const int byteIndex = pixelIndex / 4;
         const int shift = 6 - (pixelIndex % 4) * 2;
         const uint8_t mask = static_cast<uint8_t>(0x03 << shift);
         colorBuf[byteIndex] = static_cast<uint8_t>(
             (colorBuf[byteIndex] & static_cast<uint8_t>(~mask)) |
             ((color & 0x03) << shift));
+#endif
     }
 #endif
 }
@@ -167,18 +184,25 @@ void renderPaletteSlide() {
     clearFrame(kWhite);
     drawHeader("PALETTE TEST", kWhite);
     const int top = H / 6 + 4;
-    const int bandHeight = (H - top) * 3 / 20;
+#if EPD_BPP == 4
+    constexpr uint8_t colorCount = 6;
+    const uint8_t colors[] = {kBlack, kWhite, kYellow, kRed, kBlue, kGreen};
+    const char *labels[] = {"BLACK", "WHITE", "YELLOW", "RED", "BLUE", "GREEN"};
+#else
+    constexpr uint8_t colorCount = 4;
     const uint8_t colors[] = {kBlack, kWhite, kYellow, kRed};
     const char *labels[] = {"BLACK", "WHITE", "YELLOW", "RED"};
+#endif
+    const int bandHeight = (H - top) * 3 / (colorCount * 5);
     const int labelScale = bandHeight >= 16 ? 2 : 1;
-    for (int band = 0; band < 4; ++band) {
+    for (int band = 0; band < colorCount; ++band) {
         const int y = top + band * bandHeight;
         fillRect(0, y, W, bandHeight, colors[band]);
         const uint8_t textColor = (colors[band] == kBlack) ? kWhite : kBlack;
         drawText(labels[band], 8, y + (bandHeight - 7 * labelScale) / 2,
                  labelScale, textColor);
     }
-    const int patternY = top + 4 * bandHeight;
+    const int patternY = top + colorCount * bandHeight;
     const int patternHeight = H - patternY;
     for (int y = patternY; y < H; ++y) {
         for (int x = 0; x < W; ++x) {
@@ -257,6 +281,14 @@ void renderTestSlide(uint8_t slide) {
     case 4:
         renderSolidSlide(kRed, "RED");
         break;
+#if EPD_BPP == 4
+    case 5:
+        renderSolidSlide(kBlue, "BLUE");
+        break;
+    case 6:
+        renderSolidSlide(kGreen, "GREEN");
+        break;
+#endif
     default:
         renderOrientationSlide();
         break;
